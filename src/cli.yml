@@ -1,0 +1,30 @@
+name: percolation
+version: "0.0.1"
+author: "Nicholas Roberts"
+args:
+  - chunk_size:
+      short: cs
+      long: chunksize
+      takes_value: true
+      required: false
+  - width:
+      short: w
+      long: width
+      takes_value: true
+      required: false
+  - rotation:
+      long: rot
+      takes_value: true
+      required: false
+  - field_width:
+      long: f_width
+      takes_value: true
+      required: false
+  - field_height:
+      long: f_height
+      takes_value: true
+      required: false
+  - wire_thickness:
+      long: w_thickness
+      takes_value: true
+      required: false

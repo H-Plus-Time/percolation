@@ -1,0 +1,18 @@
+[package]
+authors = ["Nicholas Roberts <nicholas.roberts.au@gmail.com>"]
+name = "percolation"
+version = "0.1.0"
+
+[dependencies]
+euclid = "0.15.2"
+geo = "0.6.0"
+itertools = "0.6.2"
+lyon_bezier = "0.7.1"
+rand = "0.3"
+serde = "1.0"
+serde_derive = "1.0"
+serde_json = "1.0"
+
+[dependencies.clap]
+features = ["yaml"]
+version = "2.26.0"
