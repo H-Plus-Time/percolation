@@ -7,13 +7,14 @@ extern crate rand;
 use self::rand::distributions::{IndependentSample, Range};
 use self::rand::distributions::normal::Normal;
 extern crate lyon_bezier;
-use self::lyon_bezier::{QuadraticBezierSegment, QuadraticFlatteningIter};
+use self::lyon_bezier::{QuadraticBezierSegment};
 use self::lyon_bezier::Point as eucPoint;
 pub struct GeomBounds {
     pub width: f32,
     pub rot: f32
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Serialize)]
 pub struct UF {
     count: i32,
@@ -168,16 +169,17 @@ impl GeometricUF {
         let mut curve1 = Vec::new();
         let mut curve2 = Vec::new();
         // need to adjust the proportion of x and y shift
-        curve1.push(Point::new(bez.from.x+r*self.wire_thickness, bez.from.y+r*self.wire_thickness));
-        curve2.push(Point::new(bez.from.x-r*self.wire_thickness, bez.from.y-r*self.wire_thickness));
-        for p in bez.flattening_iter(0.001) {
-            curve1.push(Point::new(p.x+r*self.wire_thickness, p.y+r*self.wire_thickness));
-            curve2.push(Point::new(p.x-r*self.wire_thickness, p.y+r*self.wire_thickness));
+        let initial = Point::new(bez.from.x+self.wire_thickness, bez.from.y+self.wire_thickness);
+        curve1.push(initial.clone());
+        curve2.push(Point::new(bez.from.x-self.wire_thickness, bez.from.y-self.wire_thickness));
+        for p in bez.flattening_iter(self.wire_thickness/8.0) {
+            curve1.push(Point::new(p.x+self.wire_thickness, p.y+self.wire_thickness));
+            curve2.push(Point::new(p.x-self.wire_thickness, p.y+self.wire_thickness));
         }
         curve2.reverse();
         curve1.extend(curve2);
         
-        curve1.push(Point::new(bez.from.x+r*0.05, bez.from.y+r*0.05));
+        curve1.push(initial.clone());
         let exteriors = LineString(curve1);
         
         // return implicitly
@@ -185,9 +187,13 @@ impl GeometricUF {
     }
 
     pub fn percolate(&mut self, chunk_size: i32, geom_bounds: GeomBounds) {
+        // for spatial coordinates - presume no external force 
+        // influences the likelihood of a wire depositing at x,y
         let uniform = Range::new(0.0f32, 1.0f32);
         let mut rng = rand::thread_rng();
+        // 99% of results in the range [0,1]
         let std_norm = Normal::new(0.5, 0.1666);
+        // 99% of results in the range (-1, 1)
         let signed_norm = Normal::new(0.0, 0.3333);
         loop {
             let current_length: i32 = self.parent.len() as i32;
@@ -206,6 +212,7 @@ impl GeometricUF {
             }).collect();
             self.add_elements(geoms);
             self.connect(Some(current_length));
+            println!("{} wires", current_length);
             if self.percolates() {
                 println!("Number of elements: {:?}", self.parent.len());
                 break;
