@@ -1,0 +1,34 @@
+<!doctype html>
+<html>
+    <head></head>
+    <body>
+        <svg id="drawing"></svg>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/svg.js/2.6.3/svg.min.js"></script>
+        <script>
+            var Module = {
+                onRuntimeInitialized: function () {
+                    percolate = Module.cwrap('percolate', 'string', ['number', 'number', 'number', 'number', 'number', 'number']);
+                    generate = Module.cwrap('generate', 'string', ['number', 'number', 'number', 'number', 'number', 'number', 'number']);
+                }
+            };
+        </script>
+        <script src="./target/wasm32-unknown-emscripten/debug/percolation.js"></script>
+        <script>
+            var run_percolate = function () {
+                // let res = JSON.parse(percolate(10000.0,10000.0,5.0,10,250.0,1.0));
+                let res = JSON.parse(generate(10000.0,10000.0,5.0,10,200.0,1.0, 1000));
+                var draw = SVG('drawing').size(res.fieldwidth, res.fieldheight);
+                console.log(res);
+                hscale = 1
+                vscale = 1
+                res.objects.forEach(obj => {
+                    let pstring = obj.exterior.reduce((a,b) => a + `${b.x*hscale},${b.y*vscale} `, '');
+                    // console.log(pstring);
+                    draw.polygon(pstring).fill('#f06');
+                })
+                // var polygon = draw.polygon('50,0 60,40 100,50 60,60 50,100 40,60 0,50 40,40');
+                // polygon.fill('#f06').move(20, 20);
+            }
+        </script>
+    </body>
+</html>

@@ -106,7 +106,7 @@ impl GeometricUF {
         let exterior_top = LineString(vec![Point::new(0., 0.), Point::new(fieldwidth, 0.),
                                     Point::new(fieldwidth, wire_thickness), Point::new(0., wire_thickness), Point::new(0., 0.)]);
         let exterior_bottom = LineString(vec![Point::new(0., fieldheight), Point::new(fieldwidth, fieldheight),
-                                    Point::new(fieldwidth, (fieldheight+wire_thickness)), Point::new(0., (fieldheight+wire_thickness)), Point::new(0., 0.)]);
+                                    Point::new(fieldwidth, (fieldheight-wire_thickness)), Point::new(0., (fieldheight-wire_thickness)), Point::new(0., 0.)]);
         let top = Polygon::new(exterior_top.clone(), Vec::new());
         let bottom = Polygon::new(exterior_bottom.clone(), Vec::new());
         objects.push(top);
@@ -146,6 +146,19 @@ impl GeometricUF {
         }
         changes.iter().foreach(|&(i,j)| { self.union(i,j) })
     }
+    fn coerce_to_range(&self, num: f32, min: f32, max: f32) -> f32{
+        return match num {
+            _ if num >= min && num <= max => num,
+            _ if num <= min => min,
+            _ if num >= max => max,
+            _ => num
+        }
+    }
+    fn restricted_point(&self, x: f32, y: f32) -> Point<f32> {
+        let x = self.coerce_to_range(x, 0., self.fieldwidth);
+        let y = self.coerce_to_range(y, 0., self.fieldheight);
+        return Point::new(x,y);
+    }
     // TODO implement de Casteljau, polygonization
     fn generate_wire(&self, cx: f32, cy: f32, rot: f32, r: f32, ox: f32, oy: f32) -> Polygon<f32> {
         // calculate start and end from centre point, rotation and width
@@ -169,12 +182,13 @@ impl GeometricUF {
         let mut curve1 = Vec::new();
         let mut curve2 = Vec::new();
         // need to adjust the proportion of x and y shift
-        let initial = Point::new(bez.from.x+self.wire_thickness, bez.from.y+self.wire_thickness);
+        let initial = self.restricted_point(bez.from.x+self.wire_thickness, bez.from.y+self.wire_thickness);
         curve1.push(initial.clone());
-        curve2.push(Point::new(bez.from.x-self.wire_thickness, bez.from.y-self.wire_thickness));
+        curve2.push(self.restricted_point(bez.from.x-self.wire_thickness, bez.from.y-self.wire_thickness));
         for p in bez.flattening_iter(self.wire_thickness/8.0) {
-            curve1.push(Point::new(p.x+self.wire_thickness, p.y+self.wire_thickness));
-            curve2.push(Point::new(p.x-self.wire_thickness, p.y+self.wire_thickness));
+            
+            curve1.push(self.restricted_point(p.x+self.wire_thickness, p.y+self.wire_thickness));
+            curve2.push(self.restricted_point(p.x-self.wire_thickness, p.y+self.wire_thickness));
         }
         curve2.reverse();
         curve1.extend(curve2);
@@ -184,6 +198,34 @@ impl GeometricUF {
         
         // return implicitly
         return Polygon::new(exteriors.clone(), Vec::new());
+    }
+
+    pub fn generate(&mut self, chunk_size: i32, geom_bounds: GeomBounds, num_iter: i32) {
+        // for spatial coordinates - presume no external force 
+        // influences the likelihood of a wire depositing at x,y
+        let uniform = Range::new(0.0f32, 1.0f32);
+        let signed_uniform = Range::new(-1.0f32, 1.0f32);
+        let mut rng = rand::thread_rng();
+        // 99% of results in the range [0,1]
+        let std_norm = Normal::new(0.5, 0.1666);
+        // 99% of results in the range (-1, 1)
+        let signed_norm = Normal::new(0.0, 0.3333);
+        let current_length: i32 = self.parent.len() as i32;
+        let geoms = (0..num_iter).map(|_| {
+            let cx = uniform.ind_sample(&mut rng)*self.fieldwidth;
+            let cy = uniform.ind_sample(&mut rng)*self.fieldheight;
+            let rot = (signed_uniform.ind_sample(&mut rng) as f32)*geom_bounds.rot;
+            let r = (std_norm.ind_sample(&mut rng) as f32)*geom_bounds.width/2.0;
+            let hypot = (uniform.ind_sample(&mut rng) as f32)*geom_bounds.width/2.0;
+            let theta_o = signed_uniform.ind_sample(&mut rng) as f32;
+            let ox = theta_o.sin()*hypot;
+            let oy = theta_o.cos()*hypot;
+            return (cx,cy,rot,r,ox,oy);
+        }).filter(|&(_,_,_,r,_,_)| { r > 0.0f32 }).map(|(cx,cy,rot,r,ox,oy)| {
+            self.generate_wire(cx,cy,rot,r,ox,oy)
+        }).collect();
+        self.add_elements(geoms);
+        // self.connect(Some(current_length));
     }
 
     pub fn percolate(&mut self, chunk_size: i32, geom_bounds: GeomBounds) {
@@ -212,9 +254,9 @@ impl GeometricUF {
             }).collect();
             self.add_elements(geoms);
             self.connect(Some(current_length));
-            println!("{} wires", current_length);
+            // println!("{} wires", current_length);
             if self.percolates() {
-                println!("Number of elements: {:?}", self.parent.len());
+                // println!("Number of elements: {:?}", self.parent.len());
                 break;
             }
         }

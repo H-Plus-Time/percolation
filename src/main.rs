@@ -1,9 +1,14 @@
+#![feature(link_args)]
+#[link_args = "-s ALLOW_MEMORY_GROWTH=1"]
+
 #[macro_use]
 extern crate serde_derive;
-
+#[macro_use]
+extern crate stdweb;
 extern crate serde_json;
 use serde_json::to_string_pretty;
-
+use std::os::raw::c_char;
+use std::ffi::CString;
 #[macro_use]
 extern crate clap;
 use clap::App;
@@ -13,6 +18,47 @@ use geometric_uf::{GeometricUF, GeomBounds};
 use std::f32::consts::PI;
 use std::fs::File;
 use std::io::Write;
+use stdweb::serde::Serde;
+
+#[cfg(target_os = "emscripten")]
+fn main() {
+    stdweb::initialize();
+    println!("Hello, world!");
+    stdweb::event_loop();
+}
+
+
+#[no_mangle]
+pub fn percolate(fw: f32, fh: f32, wt: f32, cs: i32, width: f32, rot: f32) -> *mut c_char {
+    let mut simulation = GeometricUF::new(fw,fh,wt);
+    simulation.percolate(cs, GeomBounds{width, rot: rot*PI});
+    let res = to_string_pretty(&simulation);
+    match res {
+        Ok(msg) => {
+                return CString::new(msg).unwrap().into_raw();
+        },
+        Err(_) => {
+            return CString::new("oh no!").unwrap().into_raw();
+        }
+    }
+}
+
+#[no_mangle]
+pub fn generate(fw: f32, fh: f32, wt: f32, cs: i32, width: f32, rot: f32, num_iter: i32) -> *mut c_char {
+    let mut simulation = GeometricUF::new(fw,fh,wt);
+    simulation.generate(cs, GeomBounds{width, rot: rot*PI}, num_iter);
+    let res = to_string_pretty(&simulation);
+    match res {
+        Ok(msg) => {
+                return CString::new(msg).unwrap().into_raw();
+        },
+        Err(_) => {
+            return CString::new("oh no!").unwrap().into_raw();
+        }
+    }
+}
+
+#[cfg(not(target_os = "emscripten"))]
 fn main() {
     let yaml = load_yaml!("cli.yml");
     let matches = App::from_yaml(yaml).get_matches();
